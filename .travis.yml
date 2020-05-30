@@ -21,8 +21,8 @@ install:
   - go mod download
 
 before_script:
-  - psql -c "CREATE IF NOT EXISTS DATABASE test;" -U postgres
-  - psql -c "CREATE IF NOT EXISTS USER user WITH PASSWORD 'pass';" -U postgres
+  - psql -c "CREATE DATABASE IF NOT EXISTS test;" -U postgres
+  - psql -c "CREATE USER IF NOT EXISTS user WITH PASSWORD 'pass';" -U postgres
 
 script:
   - go test -v ./internal/dbase
