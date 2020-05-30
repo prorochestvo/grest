@@ -145,6 +145,13 @@ func main() {
 }
 ```
 
+### Dependences ###
+  * golang v 1.13 or late
+
 ### External packages ###
   * [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
   * [jackc/pgx](https://github.com/jackc/pgx)
+  
+### Donate ###
+  
+You can support project making a [donation](https://www.paypal.me/prorochestvo). Thanks!
