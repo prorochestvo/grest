@@ -15,17 +15,8 @@ env:
   - GO111MODULE=on PGPORT=5432 PGUSER=user PGPASSWORD=pass PGDATABASE=test
 
 install:
-  - go mod init grest
   - go install
 
 script:
-  - go test -v ./internal/dbase
-  - go test -v ./internal/helper
-  - go test -v ./internal/logger
-  - go test -v ./internal/mux
-  - go test -v ./usr
-  - go test -v ./db
-  - go test -v ./example/driver/database-sql
-  - go test -v ./example/driver/jackc-pgx
   - go test -v .
   - go build -ldflags "-s -w" -o "psql-rest" ./example/main.go
