@@ -6,7 +6,7 @@ const (
 	StatusContinue           Status = http.StatusContinue
 	StatusSwitchingProtocols Status = http.StatusSwitchingProtocols
 	StatusProcessing         Status = http.StatusProcessing
-	StatusEarlyHints         Status = http.StatusEarlyHints
+	//StatusEarlyHints         Status = http.StatusEarlyHints
 
 	StatusOK                   Status = http.StatusOK
 	StatusCreated              Status = http.StatusCreated
@@ -51,7 +51,7 @@ const (
 	StatusUnprocessableEntity          Status = http.StatusUnprocessableEntity
 	StatusLocked                       Status = http.StatusLocked
 	StatusFailedDependency             Status = http.StatusFailedDependency
-	StatusTooEarly                     Status = http.StatusTooEarly
+	//StatusTooEarly                     Status = http.StatusTooEarly
 	StatusUpgradeRequired              Status = http.StatusUpgradeRequired
 	StatusPreconditionRequired         Status = http.StatusPreconditionRequired
 	StatusTooManyRequests              Status = http.StatusTooManyRequests
