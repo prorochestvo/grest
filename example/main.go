@@ -85,7 +85,7 @@ func main() {
 	if host := os.Getenv("DB_HOST"); len(host) > 0 {
 		psqlConfig.Host = host
 	}
-	if port, err := strconv.ParseUint(os.Getenv("POSTGRES_PORT"), 10, 16); err == nil {
+	if port, err := strconv.ParseUint(os.Getenv("DB_PORT"), 10, 16); err == nil {
 		psqlConfig.Port = uint16(port)
 	}
 	if base := os.Getenv("DB_BASE"); len(base) > 0 {
