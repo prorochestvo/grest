@@ -15,7 +15,7 @@ addons:
   postgresql: '10'
 
 env:
-  - GO111MODULE=on DB_PORT=5432 DB_USER=user DB_PASS=pass DB_BASE=test
+  - GO111MODULE=on PGPORT=5432 PGUSER=user PGPASSWORD=pass PGDATABASE=test DB_PORT=5432 DB_USER=user DB_PASS=pass DB_BASE=test
 
 install:
   - go mod download
