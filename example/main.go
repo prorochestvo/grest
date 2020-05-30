@@ -20,8 +20,8 @@ const (
 	PSQLHost string = "127.0.0.1"
 	PSQLPort uint16 = 5432
 	PSQLBase string = "test"
-	PSQLUser string = "user"
-	PSQLPass string = "pass"
+	PSQLUser string = "tester"
+	PSQLPass string = "password"
 
 	HTTPPort uint16 = 8080
 

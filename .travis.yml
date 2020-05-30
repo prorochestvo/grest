@@ -16,14 +16,14 @@ addons:
 
 env:
   global:
-  - GO111MODULE=on DB_PORT=5432 DB_USER=user DB_PASS=pass DB_BASE=test
+  - GO111MODULE=on DB_PORT=5432 DB_USER=tester DB_PASS=pass DB_BASE=test
 
 install:
   - go mod download
 
 before_script:
   - psql -c "CREATE DATABASE test;" -U postgres
-  - psql -c "CREATE USER foo WITH PASSWORD 'bar';" -U postgres
+  - psql -c "CREATE USER tester WITH PASSWORD 'password';" -U postgres
 
 script:
   - go test -v ./internal/dbase
