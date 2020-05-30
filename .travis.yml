@@ -12,11 +12,7 @@ services:
   - postgresql
 
 env:
-  - GO111MODULE=on
-  - PGPORT=5432
-  - PGUSER=user
-  - PGPASSWORD=pass
-  - PGDATABASE=test
+  - GO111MODULE=on PGPORT=5432 PGUSER=user PGPASSWORD=pass PGDATABASE=test
 
 install:
   - go mod init grest
