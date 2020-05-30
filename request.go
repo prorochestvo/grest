@@ -27,7 +27,7 @@ type Request struct {
 }
 
 func (this *Request) Logger(format string, arg ...interface{}) {
-	if err := logger.FileSavef(format, arg); err != nil {
+	if err := logger.FileSavef(format, arg...); err != nil {
 		_, _ = this.router.Stderr.Write([]byte(fmt.Sprintf("logger: %s, %s", time.Now().Format("2006-01-02"), err.Error())))
 	}
 }
