@@ -11,7 +11,7 @@ import (
 var lock sync.Mutex
 
 func FileSavef(format string, arg ...interface{}) error {
-	return FileSave(fmt.Sprintf(format, arg))
+	return FileSave(fmt.Sprintf(format, arg...))
 }
 
 func FileSave(text string) error {
