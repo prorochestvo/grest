@@ -145,6 +145,9 @@ func main() {
 }
 ```
 
+### Dependences ###
+  * golang v 1.13.11 or late
+
 ### External packages ###
   * [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
   * [jackc/pgx](https://github.com/jackc/pgx)
