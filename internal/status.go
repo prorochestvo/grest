@@ -52,11 +52,11 @@ const (
 	StatusLocked                       Status = http.StatusLocked
 	StatusFailedDependency             Status = http.StatusFailedDependency
 	//StatusTooEarly                     Status = http.StatusTooEarly
-	StatusUpgradeRequired              Status = http.StatusUpgradeRequired
-	StatusPreconditionRequired         Status = http.StatusPreconditionRequired
-	StatusTooManyRequests              Status = http.StatusTooManyRequests
-	StatusRequestHeaderFieldsTooLarge  Status = http.StatusRequestHeaderFieldsTooLarge
-	StatusUnavailableForLegalReasons   Status = http.StatusUnavailableForLegalReasons
+	StatusUpgradeRequired             Status = http.StatusUpgradeRequired
+	StatusPreconditionRequired        Status = http.StatusPreconditionRequired
+	StatusTooManyRequests             Status = http.StatusTooManyRequests
+	StatusRequestHeaderFieldsTooLarge Status = http.StatusRequestHeaderFieldsTooLarge
+	StatusUnavailableForLegalReasons  Status = http.StatusUnavailableForLegalReasons
 
 	StatusInternalServerError           Status = http.StatusInternalServerError
 	StatusNotImplemented                Status = http.StatusNotImplemented

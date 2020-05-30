@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/jackc/pgx"
 	"grest/db"
+	"os"
+	"strconv"
 	"testing"
 )
 
@@ -16,8 +18,25 @@ const (
 )
 
 func TestDriver(t *testing.T) {
+	// pgx config
+	psqlConfig := pgx.ConnConfig{Host: PSQLHost, Port: PSQLPort, User: PSQLUser, Password: PSQLPass, Database: PSQLBase}
+	if host := os.Getenv("DB_HOST"); len(host) > 0 {
+		psqlConfig.Host = host
+	}
+	if port, err := strconv.ParseUint(os.Getenv("DB_PORT"), 10, 16); err == nil {
+		psqlConfig.Port = uint16(port)
+	}
+	if base := os.Getenv("DB_BASE"); len(base) > 0 {
+		psqlConfig.Database = base
+	}
+	if user := os.Getenv("DB_USER"); len(user) > 0 {
+		psqlConfig.User = user
+	}
+	if pass := os.Getenv("DB_PASS"); len(pass) > 0 {
+		psqlConfig.Password = pass
+	}
 	// postgres database
-	base, err := pgx.NewConnPool(pgx.ConnPoolConfig{ConnConfig: pgx.ConnConfig{Host: PSQLHost, Port: PSQLPort, User: PSQLUser, Password: PSQLPass, Database: PSQLBase}})
+	base, err := pgx.NewConnPool(pgx.ConnPoolConfig{ConnConfig: psqlConfig})
 	if err != nil {
 		t.Fatalf("db[postgresql]: %s", err.Error())
 	} else if _, err := base.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS "%s"; CREATE TABLE IF NOT EXISTS "%s" ("id" BIGSERIAL NOT NULL, "text" TEXT, PRIMARY KEY ("id"));`, "_driver_clients", "_driver_clients")); err != nil {

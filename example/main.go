@@ -17,6 +17,12 @@ import (
 )
 
 const (
+	PSQLHost string = "127.0.0.1"
+	PSQLPort uint16 = 5432
+	PSQLBase string = "test"
+	PSQLUser string = "user"
+	PSQLPass string = "pass"
+
 	HTTPPort uint16 = 8080
 
 	RoleAdmin   usr.Role = 1
@@ -81,7 +87,7 @@ VALUES ('admin','pass-admin','ADMIN'),
 
 func main() {
 	// config
-	psqlConfig := pgx.ConnConfig{Host: "127.0.0.17", Port: 5432, User: "user", Password: "pass", Database: "test"}
+	psqlConfig := pgx.ConnConfig{Host: PSQLHost, Port: PSQLPort, User: PSQLUser, Password: PSQLPass, Database: PSQLBase}
 	if host := os.Getenv("DB_HOST"); len(host) > 0 {
 		psqlConfig.Host = host
 	}
