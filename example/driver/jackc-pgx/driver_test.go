@@ -10,9 +10,9 @@ import (
 const (
 	PSQLHost string = "127.0.0.1"
 	PSQLPort uint16 = 5432
-	PSQLBase string = "postgres"
-	PSQLUser string = "postgres"
-	PSQLPass string = "postgres"
+	PSQLBase string = "test"
+	PSQLUser string = "user"
+	PSQLPass string = "pass"
 )
 
 func TestDriver(t *testing.T) {
