@@ -32,7 +32,6 @@ services:
       - dbserver
     volumes:
       - ..:/go/src/app
-      #- ../:/usr/local/go/src/grest/
     working_dir: /go/src/app
     command: bash -c "go run ./example/main.go"
     stop_grace_period: 1m

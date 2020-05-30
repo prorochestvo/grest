@@ -482,7 +482,22 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[module-sql-editor]: modules: %s (%s)", "wrong content-type header", strings.Join(h, " "))
 	} else if s := fmt.Sprintf("SELECT *\nFROM %s\n%s;", UserSession.Model().Table(), "WHERE (NOT(ID BETWEEN '2' AND '3')) AND (name LIKE 'admin') AND (name LIKE 'support') AND (IS NULL is_enabled) AND (NOT(id IN ('7', '6', '5'))) AND (uid = '1')\nORDER BY id DESC\nLIMIT 1\nOFFSET 123"); string(body) != s {
 		t.Errorf("grest[module-sql-editor]: modules: wrong sql response (%s)\n\n%s", string(body), string(s))
-	}
+	} else
+  if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", Port, User.Model().Table(), "?:!in[id][]=1&:!in[id][]=2&:!in[id][]=3"), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+    t.Errorf("grest[module-sql-editor]: modules: %s", err.Error())
+  } else if code != http.StatusOK || string(body) != "SELECT *\nFROM user\nWHERE (NOT(id IN ('1', '2', '3')));" {
+    t.Errorf("grest[module-sql-editor]: modules: wrong response code (%d) or response body (%s)", code, body)
+  } else
+  if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", Port, User.Model().Table(), "?2:|like[name]=A%25&1:like[name]=B%25"), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+    t.Errorf("grest[module-sql-editor]: modules: %s", err.Error())
+  } else if code != http.StatusOK || string(body) != "SELECT *\nFROM user\nWHERE (name LIKE 'B%') OR (name LIKE 'A%');" {
+    t.Errorf("grest[module-sql-editor]: modules: wrong response code (%d) or response body (%s)", code, body)
+  } else
+  if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", Port, User.Model().Table(), "?:sort[name]=ASC&role=admin"), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+    t.Errorf("grest[module-sql-editor]: modules: %s", err.Error())
+  } else if code != http.StatusOK || string(body) != "SELECT *\nFROM user\nWHERE (role = 'admin')\nORDER BY name ASC;" {
+    t.Errorf("grest[module-sql-editor]: modules: wrong response code (%d) or response body (%s)", code, body)
+  }
 	// check modules http-parser
 	if code, head, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/request/parser", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[module-http-parser]: modules: %s", err.Error())

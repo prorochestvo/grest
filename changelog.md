@@ -1,22 +1,5 @@
-# GO-REST
-##### Rest protocol by golang
+### **GREST** *(GO-REST)*
 
-GoLang Native implementation of the http (REST) protocol
-Rest protocol by golang
+[![Build Status](https://travis-ci.org/prorochestvo/grest.svg?branch=master)](https://travis-ci.org/prorochestvo/grest)
 
-- go mod init grest
-- go install
-- go get github.com/gorilla/mux
-- go get github.com/mattn/go-sqlite3
-- go get github.com/jackc/pgx
-- go get github.com/cheggaaa/pb/v3
-- go get github.com/maxmclau/gput
-
-### XXXX-XX-XX ###
--
-### Build ###
-- `go build -ldflags "-s -w"`
-
-### Docker ###
-- `docker-compose up --project-name=upgrade`
-- `docker-compose down`
+This small framework to quickly build RESTful server for GoLang.
