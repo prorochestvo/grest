@@ -1,7 +1,7 @@
 package mux
 
 import (
-	"grest/internal/helper"
+	"github.com/prorochestvo/grest/internal/helper"
 	"net/http"
 	"regexp"
 )

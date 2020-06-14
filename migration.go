@@ -4,9 +4,9 @@ package grest
 import (
 	"database/sql"
 	"fmt"
-	"grest/db"
-	"grest/internal/dbase"
-	"grest/internal/helper"
+	"github.com/prorochestvo/grest/db"
+	"github.com/prorochestvo/grest/internal/dbase"
+	"github.com/prorochestvo/grest/internal/helper"
 	"sort"
 	"strings"
 )

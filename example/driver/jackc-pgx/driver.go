@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/jackc/pgx"
-	"grest/db"
+	"github.com/prorochestvo/grest/db"
 	"strings"
 )
 

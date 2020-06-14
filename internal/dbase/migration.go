@@ -2,7 +2,7 @@ package dbase
 
 import (
 	"fmt"
-	"grest/db"
+	"github.com/prorochestvo/grest/db"
 	"time"
 )
 

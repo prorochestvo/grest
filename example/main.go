@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/jackc/pgx"
 	"grest"
-	"grest/db"
-	"grest/usr"
+	"github.com/prorochestvo/grest/db"
+	"github.com/prorochestvo/grest/usr"
 	"log"
 	"net/http"
 	"os"
@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	. "grest/example/driver/jackc-pgx"
+	. "github.com/prorochestvo/grest/example/driver/jackc-pgx"
 )
 
 const (

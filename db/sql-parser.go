@@ -1,7 +1,7 @@
 package db
 
 import (
-	"grest/internal/helper"
+	"github.com/prorochestvo/grest/internal/helper"
 	"net/http"
 	"net/url"
 	"regexp"

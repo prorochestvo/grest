@@ -3,7 +3,7 @@ package database_sql
 import (
 	"database/sql"
 	"fmt"
-	"grest/db"
+	"github.com/prorochestvo/grest/db"
 	"os"
 	"testing"
 

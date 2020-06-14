@@ -1,8 +1,8 @@
 package grest
 
 import (
-	"grest/internal"
-	"grest/usr"
+	"github.com/prorochestvo/grest/internal"
+	"github.com/prorochestvo/grest/usr"
 )
 
 /*

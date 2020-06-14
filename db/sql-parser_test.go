@@ -2,7 +2,7 @@ package db
 
 import (
 	"fmt"
-	"grest/internal/helper"
+	"github.com/prorochestvo/grest/internal/helper"
 	"net/url"
 	"strings"
 	"testing"

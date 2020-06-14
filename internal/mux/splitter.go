@@ -3,7 +3,7 @@ package mux
 import (
 	"bytes"
 	"fmt"
-	"grest/internal/helper"
+	"github.com/prorochestvo/grest/internal/helper"
 	"net/http"
 	"regexp"
 	"strings"

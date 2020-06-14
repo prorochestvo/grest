@@ -3,7 +3,7 @@ package jackc_pgx
 import (
 	"fmt"
 	"github.com/jackc/pgx"
-	"grest/db"
+	"github.com/prorochestvo/grest/db"
 	"os"
 	"strconv"
 	"testing"

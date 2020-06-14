@@ -1,6 +1,6 @@
 package usr
 
-import "grest/internal"
+import "github.com/prorochestvo/grest/internal"
 
 const (
 	ALEVEL_READ  internal.AccessLevel = 0x0001

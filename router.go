@@ -2,11 +2,11 @@ package grest
 
 import (
 	"fmt"
-	"grest/db"
-	"grest/internal"
-	"grest/internal/helper"
-	"grest/internal/mux"
-	"grest/usr"
+	"github.com/prorochestvo/grest/db"
+	"github.com/prorochestvo/grest/internal"
+	"github.com/prorochestvo/grest/internal/helper"
+	"github.com/prorochestvo/grest/internal/mux"
+	"github.com/prorochestvo/grest/usr"
 	"io"
 	"net/http"
 	"os"

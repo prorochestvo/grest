@@ -3,9 +3,9 @@ package grest
 import (
 	"encoding/json"
 	"fmt"
-	"grest/db"
-	"grest/internal/helper"
-	"grest/usr"
+	"github.com/prorochestvo/grest/db"
+	"github.com/prorochestvo/grest/internal/helper"
+	"github.com/prorochestvo/grest/usr"
 	"io/ioutil"
 	"net/http"
 	"reflect"

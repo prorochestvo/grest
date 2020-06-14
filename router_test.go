@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"grest/db"
-	"grest/internal/helper"
-	"grest/usr"
+	"github.com/prorochestvo/grest/db"
+	"github.com/prorochestvo/grest/internal/helper"
+	"github.com/prorochestvo/grest/usr"
 	"log"
 	"net/http"
 	"os"
@@ -19,7 +19,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	. "grest/example/driver/database-sql"
+	. "github.com/prorochestvo/grest/example/driver/database-sql"
 )
 
 const (

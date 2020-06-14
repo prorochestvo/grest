@@ -2,8 +2,8 @@ package grest
 
 import (
 	"fmt"
-	"grest/db"
-	"grest/internal/mux"
+	"github.com/prorochestvo/grest/db"
+	"github.com/prorochestvo/grest/internal/mux"
 	"net/http"
 	"strings"
 )

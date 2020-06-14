@@ -2,9 +2,9 @@ package grest
 
 import (
 	"fmt"
-	"grest/db"
-	"grest/internal/helper"
-	"grest/internal/mux"
+	"github.com/prorochestvo/grest/db"
+	"github.com/prorochestvo/grest/internal/helper"
+	"github.com/prorochestvo/grest/internal/mux"
 	"regexp"
 )
 
