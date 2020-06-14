@@ -1,6 +1,6 @@
 module github.com/prorochestvo/grest
 
-go 1.14
+go 1.12
 
 require (
 	github.com/jackc/pgx v3.6.2+incompatible
