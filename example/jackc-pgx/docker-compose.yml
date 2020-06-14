@@ -4,10 +4,10 @@ volumes:
   postgres-data:
 
 services:
-  # Postgresql Service
+  # PostgreSQL Service
   dbserver:
     image: postgres:latest
-    container_name: dbserver
+    container_name: grest-example-jackc_pgx-db
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
@@ -22,18 +22,20 @@ services:
   # GoLang application Service
   app:
     image: golang:latest
-    container_name: grest-example_postgresql
+    container_name: grest-example-jackc_pgx
     environment:
       DB_HOST: 'dbserver:5432'
-      HTTP_PORT: '80'
+      DB_BASE: 'test'
+      DB_USER: 'user'
+      DB_PASS: 'pass'
+      HTTP_PORT: '8080'
     ports:
-      - "8080:80"
+      - "8080:8080"
     links:
       - dbserver
     volumes:
-      - ..:/go/src/app
+      - .:/go/src/app
     working_dir: /go/src/app
-    command: bash -c "go run ./example/main.go"
-    stop_grace_period: 1m
+    command: bash -c "go test -v . && go run main.go"
     depends_on:
       - dbserver

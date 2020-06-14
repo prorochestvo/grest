@@ -1,74 +1,96 @@
-package grest
+package main
 
 import (
-	"context"
+  "bytes"
+  "context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/prorochestvo/grest/db"
-	"github.com/prorochestvo/grest/internal/helper"
-	"github.com/prorochestvo/grest/usr"
-	"log"
+  "io/ioutil"
+  "log"
 	"net/http"
-	"os"
-	"regexp"
+  "os"
+  "regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
-	. "github.com/prorochestvo/grest/example/driver/database-sql"
-)
+  . "jackc_pgx-example/driver"
 
-const (
-	Port int = 3607
-
-	RoleAdmin usr.Role = 0x0001
-	RoleUser  usr.Role = 0x0002
+  "github.com/jackc/pgx"
+  "github.com/prorochestvo/grest"
+  "github.com/prorochestvo/grest/db"
+  "github.com/prorochestvo/grest/usr"
 )
 
 var (
-	User            ControllerWithModel = &ControllerUser{}
-	UserSession     ControllerWithModel = &ControllerUserSession{}
-	OperatingSystem ControllerWithModel = &ControllerOperatingSystem{}
-	APIDocs         Controller          = &ControllerAPIDocs{}
+	User            grest.ControllerWithModel = &ControllerUser{}
+	UserSession     grest.ControllerWithModel = &ControllerUserSession{}
+	OperatingSystem grest.ControllerWithModel = &ControllerOperatingSystem{}
+	APIDocs         grest.Controller          = &ControllerAPIDocs{}
 )
 
 func TestJSONRouter(t *testing.T) {
 	wg := sync.WaitGroup{}
 	var tmp interface{} = nil
-	// sqlite database
-	path := fmt.Sprintf("%s/7008360c46c3baa97dacc27a7f994f77.db", os.TempDir())
-	defer func() {
-		_ = os.Remove(path)
-	}()
-	_ = os.Remove(path)
-	base, err := sql.Open("sqlite3", path)
-	if err != nil {
-		t.Fatalf("grest[db]: %s", err.Error())
-	}
+	var itmp int64 = 0
+	var stmp string = ""
+  // database connection
+  psqlConfig := pgx.ConnConfig{Host: PSQLHost, Port: PSQLPort, User: PSQLUser, Password: PSQLPass, Database: "postgres"}
+  if host := os.Getenv("DB_HOST"); len(host) > 0 {
+    psqlConfig.Host = host
+  }
+  if port, err := strconv.ParseUint(os.Getenv("DB_PORT"), 10, 16); err == nil {
+    psqlConfig.Port = uint16(port)
+  }
+  if base := os.Getenv("DB_BASE"); len(base) > 0 {
+    psqlConfig.Database = base
+  }
+  if user := os.Getenv("DB_USER"); len(user) > 0 {
+    psqlConfig.User = user
+  }
+  if pass := os.Getenv("DB_PASS"); len(pass) > 0 {
+    psqlConfig.Password = pass
+  }
+  dbase, err := pgx.NewConnPool(pgx.ConnPoolConfig{ConnConfig: psqlConfig})
+  if err != nil {
+    log.Fatalf("PSQL %s", err.Error())
+  }
 	// router
-	router := NewJSONRouter(Driver(base))
-	router.Migration.Table = "migrations"
+	router := grest.NewJSONRouter(Driver(dbase))
+	router.Migration.Table = "__migrations"
 	router.Stderr = nil
 	router.Stdout = nil
-	router.Version = "1.0 a"
+	router.Version = "1.0"
 	if err := router.Listen(APIDocs); err != nil {
 		t.Fatalf("grest: %s", err.Error())
 	}
 	if err := router.Listen(User, UserSession, OperatingSystem); err != nil {
 		t.Fatalf("grest: %s", err.Error())
 	}
-	router.AccessControl.User = func(r *Request) (usr.User, error) {
+	router.AccessControl.User = func(r *grest.Request) (usr.User, error) {
 		role, _ := strconv.ParseInt(r.Header.Get("Authorization"), 10, 32)
 		return usr.NewUser(r.Header.Get("Authorization"), usr.Role(role)), nil
 	}
+	// reset dbase
+  if _, err := dbase.Exec(fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";",router.Migration.Table)); err != nil {
+    log.Fatalf("PSQL %s", err.Error())
+  }
+  if _, err := dbase.Exec(fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";",User.Model().Table())); err != nil {
+    log.Fatalf("PSQL %s", err.Error())
+  }
+  if _, err := dbase.Exec(fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";",UserSession.Model().Table())); err != nil {
+    log.Fatalf("PSQL %s", err.Error())
+  }
+  if _, err := dbase.Exec(fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";",OperatingSystem.Model().Table())); err != nil {
+    log.Fatalf("PSQL %s", err.Error())
+  }
 	// server
 	server := http.Server{}
 	server.Handler = router
-	server.Addr = fmt.Sprintf(":%d", Port)
+	server.Addr = fmt.Sprintf(":%d", HTTPPort)
 	server.WriteTimeout = 30 * time.Second
 	server.ReadTimeout = 30 * time.Second
 	go func() {
@@ -80,7 +102,7 @@ func TestJSONRouter(t *testing.T) {
 	}()
 	defer func() {
 		if err := server.Shutdown(context.Background()); err != nil {
-			log.Fatalf("grest[server]: %s", err.Error())
+			log.Fatalf("grest[migration]: %s", err.Error())
 		}
 		wg.Wait()
 	}()
@@ -90,15 +112,15 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[migration]: wrong start version (%s)", version)
 	} else if err := router.Migration.Up(); err != nil {
 		t.Errorf("grest[migration]: %s", err.Error())
-	} else if err := base.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", User.Model().Table())).Scan(&tmp); err != nil && err != sql.ErrNoRows {
+	} else if err := dbase.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", User.Model().Table())).Scan(&itmp); err != nil && err != sql.ErrNoRows || itmp == 0 {
 		t.Errorf("grest[migration]: %s (%s). %s", "not exists table", User.Model().Table(), err.Error())
-	} else if err := base.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", UserSession.Model().Table())).Scan(&tmp); err != nil && err != sql.ErrNoRows {
+	} else if err := dbase.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", UserSession.Model().Table())).Scan(&itmp); err != nil && err != sql.ErrNoRows || itmp == 0 {
 		t.Errorf("grest[migration]: %s (%s). %s", "not exists table", UserSession.Model().Table(), err.Error())
 	} else if err := router.Migration.Down(); err != nil {
 		t.Errorf("grest[migration]: %s", err.Error())
 	} else if err := router.Migration.Down(); err != nil {
 		t.Errorf("grest[migration]: %s", err.Error())
-	} else if err := base.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", UserSession.Model().Table())).Scan(&tmp); err == nil {
+	} else if err := dbase.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", UserSession.Model().Table())).Scan(&itmp); err == nil {
 		t.Errorf("grest[migration]: %s (%s)", "must no such table", UserSession.Model().Table())
 	} else if err := router.Migration.Up(); err != nil {
 		t.Errorf("grest[migration]: %s", err.Error())
@@ -108,23 +130,29 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[migration]: %s", err.Error())
 	} else if version := router.Migration.Version(); version != "v-user_session-0002" {
 		t.Errorf("grest[migration]: wrong last version (%s)", version)
-	} else if err := base.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", User.Model().Table())).Scan(&tmp); err != nil && err != sql.ErrNoRows {
+	} else if err := dbase.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", User.Model().Table())).Scan(tmp); err != nil && err != sql.ErrNoRows || itmp == 0 {
 		t.Errorf("grest[migration]: %s (%s). %s", "not exists table", User.Model().Table(), err.Error())
-	} else if err := base.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", UserSession.Model().Table())).Scan(&tmp); err != nil && err != sql.ErrNoRows {
+	} else if err := dbase.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s;", UserSession.Model().Table())).Scan(tmp); err != nil && err != sql.ErrNoRows || itmp == 0 {
 		t.Errorf("grest[migration]: %s (%s). %s", "not exists table", UserSession.Model().Table(), err.Error())
-	}
+	} else {
+    defer func() {
+      if err := router.Migration.Reset(); err != nil {
+        log.Fatalf("grest[server]: %s", err.Error())
+      }
+    }()
+  }
 	// check controller role assess
-	if code, _, _, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/controller/list", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
+	if code, _, _, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/controller/list", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
 		t.Errorf("grest[role-assess]: %s", err.Error())
 	} else if code != http.StatusForbidden {
 		t.Errorf("grest[role-assess]: wrong response status (%d)", code)
-	} else if code, _, _, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/controller/list", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+	} else if code, _, _, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/controller/list", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[role-assess]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[role-assess]: wrong response status (%d)", code)
 	}
 	// check model fields role assess
-	if code, head, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user/3", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
+	if code, head, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user/3", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
 		t.Errorf("grest[role-assess]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[role-assess]: wrong response status (%d) %s.", code, body)
@@ -136,14 +164,14 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[role-assess]: wrong response. %s.", "json object must be 'map'")
 	} else if _, ok := item["password"]; ok {
 		t.Errorf("grest[role-assess]: private field exists ('password'). (%q).", item)
-	} else if code, _, body, err := helper.HttpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/3", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, map[string]interface{}{
+	} else if code, _, body, err := httpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/3", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, map[string]interface{}{
 		"name":     "usr-34849e699ac449ab30b97c58974",
 		"password": "pwd-34849e699ac449ab30b97c58974",
 	}); err != nil {
 		t.Errorf("grest[role-assess]: %s", err.Error())
 	} else if code != http.StatusForbidden {
 		t.Errorf("grest[role-assess]: wrong response status (%d) %s.", code, body)
-	} else if code, _, body, err := helper.HttpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/3", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
+	} else if code, _, body, err := httpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/3", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
 		"name":           "usr-3e699ac449ab30b97c484958974",
 		"password":       "pwd-3e699ac449ab30b97c484958974",
 		"internal-field": "fld-3e699ac449ab30b97c484958974",
@@ -153,7 +181,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[role-assess]: wrong response status (%d) %s.", code, body)
 	}
 	// check model fields validator
-	if code, _, body, err := helper.HttpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/3", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
+	if code, _, body, err := httpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/3", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
 		"login": "usr-3e699ac449ab30b97c484958974",
 	}); err != nil {
 		t.Errorf("grest[fields-validator]: %s", err.Error())
@@ -161,7 +189,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[fields-validator]: wrong response status (%d) %s.", code, body)
 	}
 	// check pagination action
-	if code, head, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user-session?:sort[ip]=ASC&page=2&page[size]=7", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
+	if code, head, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user-session?:sort[ip]=ASC&page=2&page[size]=7", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
 		t.Errorf("grest[pagination-action]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[pagination-action]: wrong response status (%d) %s.", code, body)
@@ -203,7 +231,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[pagination-action]: wrong response. %s.", "not found 'per_page'")
 	} else if perPage, ok := iPerPage.(float64); !ok || perPage != 7 {
 		t.Errorf("grest[pagination-action]: wrong meta[\"per_page\"]. %s (%d).", "json object must be 'integer'", int64(perPage))
-	} else if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user-session?1:sort[user_id]=DESC&2:sort[ip]=ASC&user_id=1", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+	} else if code, _, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user-session?1:sort[user_id]=DESC&2:sort[ip]=ASC&user_id=1", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[pagination-action]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[pagination-action]: wrong response status (%d) %s.", code, body)
@@ -249,7 +277,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[pagination-action]: wrong response. %s.", "not found 'per_page'")
 	} else if perPage, ok := iPerPage.(float64); !ok || perPage != 10 {
 		t.Errorf("grest[pagination-action]: wrong meta[\"per_page\"]. %s (%d).", "json object must be 'integer'", int64(perPage))
-	} else if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user-session?email=login@mail.ru", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+	} else if code, _, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user-session?email=login@mail.ru", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[pagination-action]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[pagination-action]: wrong response status (%d) %s.", code, body)
@@ -285,7 +313,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[pagination-action]: wrong meta[\"per_page\"]. %s (%d).", "json object must be 'integer'", int64(perPage))
 	}
 	// check list action
-	if code, head, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user?:sort[id]=ASC", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
+	if code, head, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user?:sort[id]=ASC", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
 		t.Errorf("grest[list-action]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[list-action]: wrong response status (%d) %s.", code, body)
@@ -319,7 +347,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[list-action]: not found \"operating-system\" on object[0][\"session\"][\"description\"]. %s (%s).", "json object must be 'string'", operatingSystem)
 	} else if description, ok := iDescription.(string); !ok || description != "LINUX-x86" {
 		t.Errorf("grest[list-action]: wrong object[0][\"session\"][\"operating-system\"][\"description\"]. %s (%s).", "json object must be 'string'", description)
-	} else if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user?login=support", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
+	} else if code, _, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user?login=support", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
 		t.Errorf("grest[list-action]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[list-action]: wrong response status (%d) %s.", code, body)
@@ -335,7 +363,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[list-action]: not found \"id\" on object[0]. %s (%s).", "json object must be 'string'", item)
 	} else if login, ok := sLogin.(string); !ok || login != "support" {
 		t.Errorf("grest[list-action]: wrong object[0][\"login\"]. %s (%s).", "json object must be 'string'", login)
-	} else if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user?email=login@mail.ru", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+	} else if code, _, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user?email=login@mail.ru", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[list-action]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[list-action]: wrong response status (%d) %s.", code, body)
@@ -353,7 +381,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[list-action]: wrong object[0][\"id\"]. %s (%d).", "json object must be 'integer'", int(id))
 	}
 	// check view action
-	if code, head, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user/2", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
+	if code, head, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/user/2", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
 		t.Errorf("grest[view-action]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[view-action]: wrong response status (%d) %s.", code, body)
@@ -369,7 +397,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[view-action]: wrong object[\"id\"]. %s (%d).", "json object must be 'integer'", int(id))
 	}
 	// check create action
-	if code, head, body, err := helper.HttpQuery(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/user", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
+	if code, head, body, err := httpQuery(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/user", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
 		"login":    "user-login",
 		"password": "user-ee4dd4983e0132201c7a73e207547429",
 		"name":     "user-ee4dd4983e0132201c7a73e207547429",
@@ -387,11 +415,11 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[create-action]: not found \"id\" on object, %s (%s)", "json object must be 'integer'", body)
 	} else if id, ok := iId.(float64); !ok || id != 4.0 {
 		t.Errorf("grest[create-action]: wrong object[\"id\"], %s (%d)", "json object must be 'integer'", int(id))
-	} else if err := base.QueryRow(fmt.Sprintf("SELECT COUNT(id) FROM %s WHERE id = %d;", User.Model().Table(), 4)).Scan(&tmp); err != nil {
+	} else if err := dbase.QueryRow(fmt.Sprintf("SELECT COUNT(id) FROM %s WHERE id = %d;", User.Model().Table(), 4)).Scan(&itmp); err != nil {
 		t.Errorf("grest[create-action]: %s", err.Error())
-	} else if i, ok := tmp.(int64); !ok || i != 1 {
+	} else if itmp != 1 {
 		t.Errorf("grest[create-action]: not found new user(#4).")
-	} else if code, _, body, err := helper.HttpQuery(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/user", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
+	} else if code, _, body, err := httpQuery(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/user", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
 		"login":    "user-login",
 		"password": "user-ee4dd4983e0132201c7a73e207547429",
 		"name":     "user-ee4dd4983e0132201c7a73e207547429",
@@ -402,7 +430,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[create-action]: wrong response status (%d) %s.", code, body)
 	}
 	// check update action
-	if code, head, body, err := helper.HttpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/4", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
+	if code, head, body, err := httpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/4", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
 		"name": "user-e2075474294983e013ee4dd2201c7a73",
 	}); err != nil {
 		t.Errorf("grest[update-action]: %s", err.Error())
@@ -418,11 +446,11 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[update-action]: not found \"id\" on object, %s (%s)", "json object must be 'integer'", body)
 	} else if id, ok := iId.(float64); !ok || id != 4.0 {
 		t.Errorf("grest[update-action]: wrong object[\"id\"], %s (%d)", "json object must be 'integer'", int(id))
-	} else if err := base.QueryRow(fmt.Sprintf("SELECT name FROM %s WHERE id = %d LIMIT 1;", User.Model().Table(), 4)).Scan(&tmp); err != nil {
+	} else if err := dbase.QueryRow(fmt.Sprintf("SELECT name FROM %s WHERE id = %d LIMIT 1;", User.Model().Table(), 4)).Scan(&stmp); err != nil {
 		t.Errorf("grest[update-action]: %s", err.Error())
-	} else if s, ok := tmp.(string); !ok || s != "user-e2075474294983e013ee4dd2201c7a73" {
-		t.Errorf("grest[update-action]: wrong user(#4) name `%s`", s)
-	} else if code, _, body, err := helper.HttpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/4", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
+	} else if stmp != "user-e2075474294983e013ee4dd2201c7a73" {
+		t.Errorf("grest[update-action]: wrong user(#4) name `%s`", stmp)
+	} else if code, _, body, err := httpQuery(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/user/4", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, map[string]interface{}{
 		"name":  "user-e2075474294983e013ee4dd2201c7a73",
 		"email": "email@mail.ru",
 	}); err != nil {
@@ -431,7 +459,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[update-action]: wrong response status (%d) %s.", code, body)
 	}
 	// check delete action
-	if code, head, body, err := helper.HttpQuery(http.MethodDelete, fmt.Sprintf("http://127.0.0.1:%d/user/4", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+	if code, head, body, err := httpQuery(http.MethodDelete, fmt.Sprintf("http://127.0.0.1:%d/user/4", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[delete-action]: %s", err.Error())
 	} else if code != http.StatusAccepted {
 		t.Errorf("grest[delete-action]: wrong response status (%d) %s.", code, body)
@@ -445,17 +473,17 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[delete-action]: not found \"id\" on object, %s (%s)", "json object must be 'integer'", body)
 	} else if id, ok := iId.(float64); !ok || id != 4.0 {
 		t.Errorf("grest[delete-action]: wrong object[\"id\"], %s (%d)", "json object must be 'integer'", int(id))
-	} else if err := base.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE id = %d;", User.Model().Table(), 4)).Scan(&tmp); err != nil {
+	} else if err := dbase.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE id = %d;", User.Model().Table(), 4)).Scan(&itmp); err != nil {
 		t.Errorf("grest[delete-action]: %s", err.Error())
-	} else if i, ok := tmp.(int64); !ok || i != 0 {
+	} else if itmp != 0 {
 		t.Errorf("grest[delete-action]: user(#4) exists")
 	}
 	// check custom action
-	if code, _, body, err := helper.HttpQuery(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/user/token", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+	if code, _, body, err := httpQuery(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/user/token", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[custom-action]: %s", err.Error())
 	} else if code != http.StatusForbidden {
 		t.Errorf("grest[custom-action]: wrong response status (%d) %s.", code, body)
-	} else if code, _, body, err := helper.HttpQuery(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/user/token", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
+	} else if code, _, body, err := httpQuery(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/user/token", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleUser)}, nil); err != nil {
 		t.Errorf("grest[custom-action]: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[custom-action]: wrong response status (%d) %s.", code, body)
@@ -463,7 +491,7 @@ func TestJSONRouter(t *testing.T) {
 		t.Errorf("grest[view-action]: wrong response (%s).", s)
 	}
 	// check module controllers-share
-	if code, head, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/controller/list", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+	if code, head, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/controller/list", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[module-share-controllers]: modules: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[module-share-controllers]: modules: wrong response status (%d)", code)
@@ -474,7 +502,7 @@ func TestJSONRouter(t *testing.T) {
 	}
 	// check modules sql-editor
 	tmp = "?uid=1&7:!in[id][]]=7&7:!in[id][]]=6&7:!in[id][]]=5&1:!between[ID][]=2&1:!between[ID][]=3&3:sort[id]=DESC&4:like[name]=admin&5:!like[name]=support&6:is_null[is_enabled]&:offset=123&:limit=1"
-	if code, head, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", Port, UserSession.Model().Table(), tmp), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+	if code, head, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", HTTPPort, UserSession.Model().Table(), tmp), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[module-sql-editor]: modules: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[module-sql-editor]: modules: wrong response status (%d)", code)
@@ -483,23 +511,23 @@ func TestJSONRouter(t *testing.T) {
 	} else if s := fmt.Sprintf("SELECT *\nFROM %s\n%s;", UserSession.Model().Table(), "WHERE (NOT(ID BETWEEN '2' AND '3')) AND (name LIKE 'admin') AND (name LIKE 'support') AND (IS NULL is_enabled) AND (NOT(id IN ('7', '6', '5'))) AND (uid = '1')\nORDER BY id DESC\nLIMIT 1\nOFFSET 123"); string(body) != s {
 		t.Errorf("grest[module-sql-editor]: modules: wrong sql response (%s)\n\n%s", string(body), string(s))
 	} else
-  if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", Port, User.Model().Table(), "?:!in[id][]=1&:!in[id][]=2&:!in[id][]=3"), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+  if code, _, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", HTTPPort, User.Model().Table(), "?:!in[id][]=1&:!in[id][]=2&:!in[id][]=3"), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
     t.Errorf("grest[module-sql-editor]: modules: %s", err.Error())
-  } else if code != http.StatusOK || string(body) != "SELECT *\nFROM user\nWHERE (NOT(id IN ('1', '2', '3')));" {
-    t.Errorf("grest[module-sql-editor]: modules: wrong response code (%d) or response body (%s)", code, body)
+  } else if code != http.StatusOK || string(body) != fmt.Sprintf("SELECT *\nFROM %s\nWHERE (NOT(id IN ('1', '2', '3')));", User.Model().Table()) {
+    t.Errorf("grest[module-sql-editor]: modules: wrong response code (%d) or response body (%s)", code, string(body))
   } else
-  if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", Port, User.Model().Table(), "?2:|like[name]=A%25&1:like[name]=B%25"), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+  if code, _, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", HTTPPort, User.Model().Table(), "?2:|like[name]=A%25&1:like[name]=B%25"), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
     t.Errorf("grest[module-sql-editor]: modules: %s", err.Error())
-  } else if code != http.StatusOK || string(body) != "SELECT *\nFROM user\nWHERE (name LIKE 'B%') OR (name LIKE 'A%');" {
-    t.Errorf("grest[module-sql-editor]: modules: wrong response code (%d) or response body (%s)", code, body)
+  } else if code != http.StatusOK || string(body) != fmt.Sprintf("SELECT *\nFROM %s\nWHERE (name LIKE 'B%s') OR (name LIKE 'A%s');", User.Model().Table(), "%", "%") {
+    t.Errorf("grest[module-sql-editor]: modules: wrong response code (%d) or response body (%s)", code, string(body))
   } else
-  if code, _, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", Port, User.Model().Table(), "?:sort[name]=ASC&role=admin"), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+  if code, _, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/sql/editor/%s%s", HTTPPort, User.Model().Table(), "?:sort[name]=ASC&role=admin"), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
     t.Errorf("grest[module-sql-editor]: modules: %s", err.Error())
-  } else if code != http.StatusOK || string(body) != "SELECT *\nFROM user\nWHERE (role = 'admin')\nORDER BY name ASC;" {
+  } else if code != http.StatusOK || string(body) != fmt.Sprintf("SELECT *\nFROM %s\nWHERE (role = 'admin')\nORDER BY name ASC;", User.Model().Table()) {
     t.Errorf("grest[module-sql-editor]: modules: wrong response code (%d) or response body (%s)", code, body)
   }
 	// check modules http-parser
-	if code, head, body, err := helper.HttpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/request/parser", Port), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
+	if code, head, body, err := httpQuery(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/docs/request/parser", HTTPPort), map[string]string{"Authorization": fmt.Sprintf("%d", RoleAdmin)}, nil); err != nil {
 		t.Errorf("grest[module-http-parser]: modules: %s", err.Error())
 	} else if code != http.StatusOK {
 		t.Errorf("grest[module-http-parser]: modules: wrong response status (%d)", code)
@@ -522,7 +550,7 @@ func TestJSONRouter(t *testing.T) {
 type ControllerUser struct{}
 
 func (this *ControllerUser) table() string {
-	return "user"
+	return "__user"
 }
 
 func (this *ControllerUser) Path() string {
@@ -533,32 +561,32 @@ func (this *ControllerUser) Id() (string, string) {
 	return "id", "[0-9]+"
 }
 
-func (this *ControllerUser) Model() Model {
-	id := INT64("id", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
-	login := FIELD("login", func(value string) (interface{}, error) { return value, nil }, usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
+func (this *ControllerUser) Model() grest.Model {
+	id := grest.INT64("id", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
+	login := grest.FIELD("login", func(value string) (interface{}, error) { return value, nil }, usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
 	login.SetValidate(func(i interface{}) bool {
 		if s, ok := i.(string); ok && len(s) > 0 {
 			return regexp.MustCompile(`^[A-Za-z_-]+$`).MatchString(s)
 		}
 		return false
 	})
-	password := TEXT("password", usr.P_WO(RoleAdmin))
-	name := TEXT("name", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
-	session := EXPAND("session", []Field{id}, UserSession.Model(), []Field{INT8("user_id")}, -1, RoleUser, RoleAdmin)
-	return NewModel(this.table(), []Field{id, login, password, name}, session)
+	password := grest.TEXT("password", usr.P_WO(RoleAdmin))
+	name := grest.TEXT("name", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
+	session := grest.EXPAND("session", []grest.Field{id}, UserSession.Model(), []grest.Field{grest.INT8("user_id")}, -1, RoleUser, RoleAdmin)
+	return grest.NewModel(this.table(), []grest.Field{id, login, password, name}, session)
 }
 
-func (this *ControllerUser) Actions() []Action {
-	token := NewAction(MethodPost, "token", func(_ *Request) (i int, m map[string]string, i2 interface{}, err error) {
+func (this *ControllerUser) Actions() []grest.Action {
+	token := grest.NewAction(grest.MethodPost, "token", func(_ *grest.Request) (i int, m map[string]string, i2 interface{}, err error) {
 		return http.StatusOK, nil, "user.Token", nil
 	}, RoleUser)
-	return []Action{
+	return []grest.Action{
 		token,
-		NewActionList(RoleUser, RoleAdmin),
-		NewActionView(RoleUser, RoleAdmin),
-		NewActionCreate(RoleAdmin),
-		NewActionUpdate(RoleAdmin),
-		NewActionDelete(RoleAdmin),
+		grest.NewActionList(RoleUser, RoleAdmin),
+		grest.NewActionView(RoleUser, RoleAdmin),
+		grest.NewActionCreate(RoleAdmin),
+		grest.NewActionUpdate(RoleAdmin),
+		grest.NewActionDelete(RoleAdmin),
 	}
 }
 
@@ -566,10 +594,11 @@ func (this *ControllerUser) Migrations() []db.Migration {
 	return []db.Migration{
 		db.NewMigration("v-user-0001",
 			fmt.Sprintf(`CREATE TABLE "%s" (
-                            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+                            "id" SERIAL NOT NULL,
                             "login" TEXT NOT NULL,
                             "password" TEXT NOT NULL,
-                            "name" TEXT
+                            "name" TEXT,
+                           PRIMARY KEY ("id")
                           );`, this.table()),
 			fmt.Sprintf(`DROP TABLE "%s";`, this.table()),
 		),
@@ -591,7 +620,7 @@ func (this *ControllerUser) Migrations() []db.Migration {
 type ControllerUserSession struct{}
 
 func (this *ControllerUserSession) table() string {
-	return "user_session"
+	return "__user_session"
 }
 
 func (this *ControllerUserSession) Path() string {
@@ -602,19 +631,19 @@ func (this *ControllerUserSession) Id() (string, string) {
 	return "created_at", ""
 }
 
-func (this *ControllerUserSession) Model() Model {
-	userId := INT8("user_id", usr.P_RO(RoleAdmin))
-	ip := TEXT("ip", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
-	system := TEXT("os", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
-	createdAt := INT32("created_at", usr.P_RW(RoleAdmin))
-	operatingSystem := EXPAND("operating-system", []Field{system}, OperatingSystem.Model(), []Field{TEXT("name")}, 1, RoleUser, RoleAdmin)
-	return NewModel(this.table(), []Field{userId, ip, system, createdAt}, operatingSystem)
+func (this *ControllerUserSession) Model() grest.Model {
+	userId := grest.INT8("user_id", usr.P_RO(RoleAdmin))
+	ip := grest.TEXT("ip", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
+	system := grest.TEXT("os", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
+	createdAt := grest.INT32("created_at", usr.P_RW(RoleAdmin))
+	operatingSystem := grest.EXPAND("operating-system", []grest.Field{system}, OperatingSystem.Model(), []grest.Field{grest.TEXT("name")}, 1, RoleUser, RoleAdmin)
+	return grest.NewModel(this.table(), []grest.Field{userId, ip, system, createdAt}, operatingSystem)
 }
 
-func (this *ControllerUserSession) Actions() []Action {
-	return []Action{
-		NewActionPagination(),
-		NewActionView(),
+func (this *ControllerUserSession) Actions() []grest.Action {
+	return []grest.Action{
+		grest.NewActionPagination(),
+		grest.NewActionView(),
 	}
 }
 
@@ -625,7 +654,7 @@ func (this *ControllerUserSession) Migrations() []db.Migration {
                             "user_id" INTEGER NOT NULL,
                             "ip" TEXT NOT NULL,
                             "os" TEXT NOT NULL DEFAULT '',
-                            "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            "created_at" INTEGER NOT NULL,
                            PRIMARY KEY ("user_id", "created_at")
                           );`, this.table()),
 			fmt.Sprintf(`DROP TABLE "%s";`, this.table()),
@@ -677,7 +706,7 @@ func (this *ControllerUserSession) Migrations() []db.Migration {
 type ControllerOperatingSystem struct{}
 
 func (this *ControllerOperatingSystem) table() string {
-	return "operating_system"
+	return "__operating_system"
 }
 
 func (this *ControllerOperatingSystem) Path() string {
@@ -688,16 +717,16 @@ func (this *ControllerOperatingSystem) Id() (string, string) {
 	return "name", "\\w+"
 }
 
-func (this *ControllerOperatingSystem) Model() Model {
-	name := TEXT("name", usr.P_RO(RoleUser), usr.P_RO(RoleAdmin))
-	description := TEXT("description", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
-	return NewModel(this.table(), []Field{name, description})
+func (this *ControllerOperatingSystem) Model() grest.Model {
+	name := grest.TEXT("name", usr.P_RO(RoleUser), usr.P_RO(RoleAdmin))
+	description := grest.TEXT("description", usr.P_RO(RoleUser), usr.P_RW(RoleAdmin))
+	return grest.NewModel(this.table(), []grest.Field{name, description})
 }
 
-func (this *ControllerOperatingSystem) Actions() []Action {
-	return []Action{
-		NewActionList(),
-		NewActionView(),
+func (this *ControllerOperatingSystem) Actions() []grest.Action {
+	return []grest.Action{
+		grest.NewActionList(),
+		grest.NewActionView(),
 	}
 }
 
@@ -727,12 +756,54 @@ func (this *ControllerAPIDocs) Path() string {
 	return "api/docs"
 }
 
-func (this *ControllerAPIDocs) Actions() []Action {
-	controllers := &ModuleControllersShare{CSS: []string{}, Role: []usr.Role{RoleAdmin}}
+func (this *ControllerAPIDocs) Actions() []grest.Action {
+	controllers := &grest.ModuleControllersShare{CSS: []string{}, Role: []usr.Role{RoleAdmin}}
 	controllers.SetPath("controller")
-	request := &ModuleHttpParser{Role: []usr.Role{RoleAdmin, RoleUser}}
+	request := &grest.ModuleHttpParser{Role: []usr.Role{RoleAdmin, RoleUser}}
 	request.SetPath("request/parser")
-	query := &ModuleSqlEditor{Role: []usr.Role{RoleAdmin, RoleUser}}
+	query := &grest.ModuleSqlEditor{Role: []usr.Role{RoleAdmin, RoleUser}}
 	query.SetPath("sql/editor")
-	return []Action{request, query, controllers}
+	return []grest.Action{request, query, controllers}
+}
+
+// http query
+func httpQuery(method, url string, head map[string]string, body map[string]interface{}) (int, map[string][]string, []byte, error) {
+  // create request
+  if req, err := http.NewRequest(method, url, nil); err != nil {
+    return 0, nil, nil, err
+  } else if req != nil {
+    // request header
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Cache-Control", "no-cache")
+    req.Header.Set("Connection", "keep-alive")
+    req.Header.Set("Pragma", "no-cache")
+    if head != nil && len(head) > 0 {
+      for k, v := range head {
+        req.Header.Set(k, v)
+      }
+    }
+    // request data
+    if body != nil && len(body) > 0 {
+      data, err := json.Marshal(body)
+      if err != nil {
+        return 0, nil, nil, err
+      }
+      req.Body = ioutil.NopCloser(bytes.NewBuffer(data))
+    }
+    // send
+    clt := &http.Client{}
+    if resp, err := clt.Do(req); err != nil {
+      return 0, nil, nil, err
+    } else if resp != nil {
+      defer func() {
+        _ = resp.Body.Close()
+      }()
+      if b, err := ioutil.ReadAll(resp.Body); err != nil {
+        return resp.StatusCode, resp.Header, nil, err
+      } else {
+        return resp.StatusCode, resp.Header, b, err
+      }
+    }
+  }
+  return 0, nil, nil, fmt.Errorf("missing request body")
 }

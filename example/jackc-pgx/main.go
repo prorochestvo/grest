@@ -1,26 +1,27 @@
 package main
 
 import (
-	"fmt"
-	"github.com/jackc/pgx"
-	"grest"
-	"github.com/prorochestvo/grest/db"
-	"github.com/prorochestvo/grest/usr"
-	"log"
+  "fmt"
+  "log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	. "github.com/prorochestvo/grest/example/driver/jackc-pgx"
+  . "jackc_pgx-example/driver"
+
+  "github.com/jackc/pgx"
+  "github.com/prorochestvo/grest"
+  "github.com/prorochestvo/grest/db"
+  "github.com/prorochestvo/grest/usr"
 )
 
 const (
 	PSQLHost string = "127.0.0.1"
 	PSQLPort uint16 = 5432
 	PSQLBase string = "test"
-	PSQLUser string = "tester"
+	PSQLUser string = "login"
 	PSQLPass string = "password"
 
 	HTTPPort uint16 = 8080
@@ -108,22 +109,23 @@ func main() {
 		port = uint16(i)
 	}
 	// database connection
-	psql, err := pgx.NewConnPool(pgx.ConnPoolConfig{ConnConfig: psqlConfig})
+  dbase, err := pgx.NewConnPool(pgx.ConnPoolConfig{ConnConfig: psqlConfig})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("PSQL %s", err.Error())
 	}
 	// rest router
-	router := grest.NewJSONRouter(Driver(psql))
+	router := grest.NewJSONRouter(Driver(dbase))
+  router.Version = "1.0"
 	router.AccessControl.User = func(r *grest.Request) (usr.User, error) {
 		role, _ := strconv.ParseInt(r.Header.Get("Authorization"), 10, 32)
 		return usr.NewUser(r.Header.Get("Authorization"), usr.Role(role)), nil
 	}
 	if err := router.Listen(&users{}); err != nil {
-		log.Fatal(err)
+		log.Fatalf("GREST CONTROLLER: %s", err.Error())
 	}
 	// migrate db
 	if err := router.Migration.Up(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("GREST MIGRATION: %s", err.Error())
 	}
 	// revise db
 	if err := router.Migration.Revise(); err != nil {
@@ -138,8 +140,8 @@ func main() {
 	srv.Addr = fmt.Sprintf(":%d", port)
 	srv.WriteTimeout = 30 * time.Second
 	srv.ReadTimeout = 30 * time.Second
-	log.Printf("Listen: 127.0.0.1:%d\n", port)
+	log.Printf("listen: 127.0.0.1:%d\n", port)
 	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal(err)
+    log.Fatalf("HTTP SERVER: %s", err.Error())
 	}
 }

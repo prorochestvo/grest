@@ -1,0 +1,15 @@
+version: "3.0"
+
+services:
+  # GoLang application Service
+  app:
+    image: golang:latest
+    container_name: grest-example-database_sql
+    environment:
+      HTTP_PORT: '8080'
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/go/src/app
+    working_dir: /go/src/app
+    command: bash -c "go test -v . && go run main.go"

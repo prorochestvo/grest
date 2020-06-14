@@ -1,7 +1,7 @@
-package database_sql
+package driver
 
 import (
-	"database/sql"
+  "database/sql"
 	"fmt"
 	"github.com/prorochestvo/grest/db"
 )

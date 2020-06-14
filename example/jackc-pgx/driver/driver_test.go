@@ -1,7 +1,7 @@
-package jackc_pgx
+package driver
 
 import (
-	"fmt"
+  "fmt"
 	"github.com/jackc/pgx"
 	"github.com/prorochestvo/grest/db"
 	"os"

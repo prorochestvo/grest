@@ -8,6 +8,7 @@ go:
 
 os:
   - linux
+  - osx
 
 services:
   - postgresql
@@ -20,6 +21,13 @@ env:
     - GO111MODULE=on DB_PORT=5432 DB_USER=tester DB_PASS=pass DB_BASE=test
 
 install:
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      brew update
+      export PG_DATA=$(brew --prefix)/var/postgres
+      pg_ctl -w start -l postgres.log --pgdata ${PG_DATA}
+      createuser -s postgres
+    fi
   - go mod download
 
 before_script:
@@ -33,7 +41,11 @@ script:
   - go test -v ./internal/mux
   - go test -v ./usr
   - go test -v ./db
-  - go test -v ./example/driver/database-sql
-  - go test -v ./example/driver/jackc-pgx
+  - cd example/jackc-pgx/
   - go test -v .
-  - go build -ldflags "-s -w" -o "psql-rest" ./example/main.go
+  - go build -ldflags "-s -w" -o "jackc-pgx" main.go
+  - cd ../database-sql
+  - go test -v .
+  - go build -ldflags "-s -w" -o "database-sql" main.go
+  - cd ../..
+  - go test -v .

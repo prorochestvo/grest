@@ -1,7 +1,7 @@
-package jackc_pgx
+package driver
 
 import (
-	"database/sql"
+  "database/sql"
 	"fmt"
 	"github.com/jackc/pgx"
 	"github.com/prorochestvo/grest/db"
