@@ -99,3 +99,7 @@ func (this *driver) Exec(query ...string) error {
 	}
 	return nil
 }
+
+func (this *driver) Escape(value string) string {
+  return fmt.Sprintf(`"%s"`, value)
+}

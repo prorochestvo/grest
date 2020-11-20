@@ -4,7 +4,7 @@ type SQLGroupBy interface {
 	Field() string
 }
 
-func NewSQLGroupBy(field string, sort string) SQLGroupBy {
+func NewSQLGroupBy(field string) SQLGroupBy {
 	result := sqlGroupBy{}
 	result.field = field
 	return &result

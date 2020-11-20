@@ -129,11 +129,11 @@ func actionPagination(r *Request) (int, map[string]string, interface{}, error) {
 		table := db.NewSQLTable(r.Model.Table())
 		for _, field := range f {
 			parsers[field.Name()] = field.Parser
-			fields = append(fields, db.NewSQLField(field.Name(), nil))
+			fields = append(fields, db.NewSQLField(r.DB.Escape(field.Name()), nil))
 		}
-		where, groupBy, orderBy, having, _, _ := db.SQLParserEx(r.Request.Request, parsers)
+		where, groupBy, orderBy, having, _, _ := db.SQLParserEx(r.Request.Request, parsers, r.DB.Escape)
 		if r.URL.ID.Value != nil {
-			where = append(where, db.NewSQLWhere(r.URL.ID.Name, string(r.URL.ID.Value)))
+			where = append(where, db.NewSQLWhere(r.DB.Escape(r.URL.ID.Name), string(r.URL.ID.Value)))
 		}
 		// page options
 		var pageNumber int64 = 0
@@ -194,11 +194,11 @@ func actionList(r *Request) (int, map[string]string, interface{}, error) {
 		table := db.NewSQLTable(r.Model.Table())
 		for _, field := range f {
 			parsers[field.Name()] = field.Parser
-			fields = append(fields, db.NewSQLField(field.Name(), nil))
+			fields = append(fields, db.NewSQLField(r.DB.Escape(field.Name()), nil))
 		}
-		where, groupBy, orderBy, having, limit, offset := db.SQLParserEx(r.Request.Request, parsers)
+		where, groupBy, orderBy, having, limit, offset := db.SQLParserEx(r.Request.Request, parsers, r.DB.Escape)
 		if r.URL.ID.Value != nil {
-			where = append(where, db.NewSQLWhere(r.URL.ID.Name, string(r.URL.ID.Value)))
+			where = append(where, db.NewSQLWhere(r.DB.Escape(r.URL.ID.Name), string(r.URL.ID.Value)))
 		}
 		if body, err := r.DB.Select(table, fields, where, groupBy, having, orderBy, limit, offset); err != nil {
 			return http.StatusInternalServerError, nil, nil, err
@@ -218,10 +218,10 @@ func actionView(r *Request) (int, map[string]string, interface{}, error) {
 	if f := getModelFields(r.Model, r.User.Role(), usr.ALEVEL_READ); f != nil && len(f) > 0 {
 		fields := make([]db.SQLField, 0)
 		table := db.NewSQLTable(r.Model.Table())
-		where := []db.SQLWhere{db.NewSQLWhere(r.URL.ID.Name, string(r.URL.ID.Value))}
+		where := []db.SQLWhere{db.NewSQLWhere(r.DB.Escape(r.URL.ID.Name), string(r.URL.ID.Value))}
 		limit := db.NewSQLLimit(1)
 		for _, field := range f {
-			fields = append(fields, db.NewSQLField(field.Name(), nil))
+			fields = append(fields, db.NewSQLField(r.DB.Escape(field.Name()), nil))
 		}
 		if body, err := r.DB.Select(table, fields, where, nil, nil, nil, limit, nil); err != nil {
 			return http.StatusInternalServerError, nil, nil, err
@@ -242,7 +242,7 @@ func actionCreate(r *Request) (int, map[string]string, interface{}, error) {
 		table := db.NewSQLTable(r.Model.Table())
 		fields := make([]db.SQLField, 0)
 		for name, value := range data {
-			fields = append(fields, db.NewSQLField(name, value))
+			fields = append(fields, db.NewSQLField(r.DB.Escape(name), value))
 		}
 		if res, err := r.DB.Insert(table, fields); err != nil {
 			return http.StatusInternalServerError, nil, nil, err
@@ -255,9 +255,9 @@ func actionCreate(r *Request) (int, map[string]string, interface{}, error) {
 			if f := getModelFields(r.Model, r.User.Role(), usr.ALEVEL_READ); id.Validate(res) && f != nil && len(f) > 0 && res != nil {
 				table := db.NewSQLTable(r.Model.Table())
 				fields := make([]db.SQLField, 0)
-				where := []db.SQLWhere{db.NewSQLWhere(id.Name(), res)}
+				where := []db.SQLWhere{db.NewSQLWhere(r.DB.Escape(id.Name()), res)}
 				for _, field := range f {
-					fields = append(fields, db.NewSQLField(field.Name(), nil))
+					fields = append(fields, db.NewSQLField(r.DB.Escape(field.Name()), nil))
 				}
 				if body, err := r.DB.Select(table, fields, where, nil, nil, nil, nil, nil); err != nil {
 					return http.StatusInternalServerError, nil, nil, err
@@ -281,9 +281,9 @@ func actionUpdate(r *Request) (int, map[string]string, interface{}, error) {
 	} else if ctrl, ok := r.Controller.(ControllerWithID); ok && ctrl != nil {
 		table := db.NewSQLTable(r.Model.Table())
 		fields := make([]db.SQLField, 0)
-		where := []db.SQLWhere{db.NewSQLWhere(r.URL.ID.Name, string(r.URL.ID.Value))}
+		where := []db.SQLWhere{db.NewSQLWhere(r.DB.Escape(r.URL.ID.Name), string(r.URL.ID.Value))}
 		for name, value := range data {
-			fields = append(fields, db.NewSQLField(name, value))
+			fields = append(fields, db.NewSQLField(r.DB.Escape(name), value))
 		}
 		if err := r.DB.Update(table, fields, where); err != nil {
 			return http.StatusInternalServerError, nil, nil, err
@@ -291,7 +291,7 @@ func actionUpdate(r *Request) (int, map[string]string, interface{}, error) {
 			fields = make([]db.SQLField, 0)
 			limit := db.NewSQLLimit(1)
 			for _, field := range f {
-				fields = append(fields, db.NewSQLField(field.Name(), nil))
+				fields = append(fields, db.NewSQLField(r.DB.Escape(field.Name()), nil))
 			}
 			if body, err := r.DB.Select(table, fields, where, nil, nil, nil, limit, nil); err != nil {
 				return http.StatusInternalServerError, nil, nil, err
@@ -311,12 +311,12 @@ func actionDelete(r *Request) (int, map[string]string, interface{}, error) {
 	}
 	if ctrl, ok := r.Controller.(ControllerWithID); ok && ctrl != nil {
 		table := db.NewSQLTable(r.Model.Table())
-		where := []db.SQLWhere{db.NewSQLWhere(r.URL.ID.Name, string(r.URL.ID.Value))}
+		where := []db.SQLWhere{db.NewSQLWhere(r.DB.Escape(r.URL.ID.Name), string(r.URL.ID.Value))}
 		if f := getModelFields(r.Model, r.User.Role(), usr.ALEVEL_READ); f != nil && len(f) > 0 {
 			fields := make([]db.SQLField, 0)
 			limit := db.NewSQLLimit(1)
 			for _, field := range f {
-				fields = append(fields, db.NewSQLField(field.Name(), nil))
+				fields = append(fields, db.NewSQLField(r.DB.Escape(field.Name()), nil))
 			}
 			if body, err := r.DB.Select(table, fields, where, nil, nil, nil, limit, nil); err != nil {
 				return http.StatusInternalServerError, nil, nil, err

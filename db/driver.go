@@ -7,4 +7,6 @@ type Driver interface {
 	Delete(table SQLTable, where []SQLWhere) (err error)
 
 	Exec(query ...string) error
+
+  Escape(value string) string
 }

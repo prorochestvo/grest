@@ -30,7 +30,7 @@ var instructions = []string{
 	"in",
 }
 
-func SQLParserEx(r *http.Request, parsers map[string]func(value string) (interface{}, error)) (where []SQLWhere, groupBy []SQLGroupBy, orderBy []SQLOrderBy, having []SQLHaving, limit SQLLimit, offset SQLOffset) {
+func SQLParserEx(r *http.Request, parsers map[string]func(value string) (interface{}, error), quote func(value string) string) (where []SQLWhere, groupBy []SQLGroupBy, orderBy []SQLOrderBy, having []SQLHaving, limit SQLLimit, offset SQLOffset) {
 	where, groupBy, orderBy, having, limit, offset = SQLParser(r.URL.Query())
 	if where != nil && len(where) > 0 {
 		tmp := make([]SQLWhere, 0)
@@ -69,7 +69,7 @@ func SQLParserEx(r *http.Request, parsers map[string]func(value string) (interfa
 			// save new instruction
 			tmp = append(tmp, &sqlWhere{
 				instruction: w.Instruction(),
-				field:       w.Field(),
+				field:       quote(w.Field()),
 				separator:   w.Separator(),
 				value:       value,
 				negative:    w.Negative(),
@@ -86,7 +86,7 @@ func SQLParserEx(r *http.Request, parsers map[string]func(value string) (interfa
 				continue
 			}
 			// save new instruction
-			tmp = append(tmp, g)
+			tmp = append(tmp, NewSQLGroupBy(quote(g.Field())))
 		}
 		groupBy = tmp
 	}
@@ -99,7 +99,7 @@ func SQLParserEx(r *http.Request, parsers map[string]func(value string) (interfa
 				continue
 			}
 			// save new instruction
-			tmp = append(tmp, o)
+			tmp = append(tmp, NewSQLOrderBy(quote(o.Field()), o.Sort()))
 		}
 		orderBy = tmp
 	}
@@ -141,7 +141,7 @@ func SQLParserEx(r *http.Request, parsers map[string]func(value string) (interfa
 			tmp = append(tmp, &sqlHaving{
 				sqlWhere: sqlWhere{
 					instruction: h.Instruction(),
-					field:       h.Field(),
+					field:       quote(h.Field()),
 					separator:   h.Separator(),
 					value:       value,
 					negative:    h.Negative(),
