@@ -8,5 +8,5 @@ type Driver interface {
 
 	Exec(query ...string) error
 
-  Escape(value string) string
+	Escape(value string) string
 }
